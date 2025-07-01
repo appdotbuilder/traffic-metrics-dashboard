@@ -1,47 +1,34 @@
 
+import { db } from '../db';
+import { trafficMetricsTable } from '../db/schema';
 import { type TrafficMetrics, type DateRangeInput } from '../schema';
+import { and, gte, lte, asc } from 'drizzle-orm';
 
 export const getTrafficMetrics = async (dateRange?: DateRangeInput): Promise<TrafficMetrics[]> => {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is fetching traffic metrics from the database, optionally filtered by date range.
+  try {
+    // Build query with conditional filtering
+    const baseQuery = db.select().from(trafficMetricsTable);
     
-    // Mock data for demonstration
-    const mockData: TrafficMetrics[] = [
-        {
-            id: 1,
-            date: new Date('2024-01-01'),
-            page_views: 15420,
-            unique_visitors: 8950,
-            bounce_rate: 42.5,
-            avg_session_duration: 185.3,
-            created_at: new Date()
-        },
-        {
-            id: 2,
-            date: new Date('2024-01-02'),
-            page_views: 18760,
-            unique_visitors: 10230,
-            bounce_rate: 38.2,
-            avg_session_duration: 203.7,
-            created_at: new Date()
-        },
-        {
-            id: 3,
-            date: new Date('2024-01-03'),
-            page_views: 12890,
-            unique_visitors: 7640,
-            bounce_rate: 45.8,
-            avg_session_duration: 167.9,
-            created_at: new Date()
-        }
-    ];
+    const finalQuery = dateRange
+      ? baseQuery.where(
+          and(
+            gte(trafficMetricsTable.date, dateRange.start_date.toISOString().split('T')[0]), // Convert Date to YYYY-MM-DD string
+            lte(trafficMetricsTable.date, dateRange.end_date.toISOString().split('T')[0])
+          )
+        ).orderBy(asc(trafficMetricsTable.date))
+      : baseQuery.orderBy(asc(trafficMetricsTable.date));
 
-    // If date range is provided, filter the mock data (in real implementation, this would be a DB query)
-    if (dateRange) {
-        return mockData.filter(metric => 
-            metric.date >= dateRange.start_date && metric.date <= dateRange.end_date
-        );
-    }
+    const results = await finalQuery.execute();
 
-    return mockData;
+    // Convert numeric fields back to numbers and date strings back to Date objects
+    return results.map(metric => ({
+      ...metric,
+      date: new Date(metric.date), // Convert date string to Date object
+      bounce_rate: parseFloat(metric.bounce_rate), // Convert numeric string to number
+      avg_session_duration: parseFloat(metric.avg_session_duration) // Convert numeric string to number
+    }));
+  } catch (error) {
+    console.error('Failed to get traffic metrics:', error);
+    throw error;
+  }
 };

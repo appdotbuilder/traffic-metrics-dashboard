@@ -1,28 +1,32 @@
 
+import { db } from '../db';
+import { trafficMetricsTable } from '../db/schema';
 import { type TrafficMetrics } from '../schema';
+import { desc, gte } from 'drizzle-orm';
 
 export const getRecentMetrics = async (days: number = 7): Promise<TrafficMetrics[]> => {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is fetching the most recent traffic metrics for the specified number of days.
+  try {
+    // Calculate the start date (days ago from today)
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
     
-    // Generate mock data for recent days
-    const mockData: TrafficMetrics[] = [];
-    const today = new Date();
-    
-    for (let i = 0; i < days; i++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        
-        mockData.push({
-            id: i + 1,
-            date: date,
-            page_views: Math.floor(Math.random() * 20000) + 10000, // Random between 10k-30k
-            unique_visitors: Math.floor(Math.random() * 15000) + 5000, // Random between 5k-20k
-            bounce_rate: Math.round((Math.random() * 30 + 30) * 100) / 100, // Random between 30-60%
-            avg_session_duration: Math.round((Math.random() * 100 + 150) * 100) / 100, // Random between 150-250 seconds
-            created_at: new Date()
-        });
-    }
-    
-    return mockData.reverse(); // Return in chronological order
+    // Query for metrics from the last N days, ordered by date descending (most recent first)
+    const results = await db.select()
+      .from(trafficMetricsTable)
+      .where(gte(trafficMetricsTable.date, startDate.toISOString().split('T')[0])) // Convert to YYYY-MM-DD format
+      .orderBy(desc(trafficMetricsTable.date))
+      .limit(days)
+      .execute();
+
+    // Convert numeric fields and date fields back to proper types before returning
+    return results.map(metric => ({
+      ...metric,
+      date: new Date(metric.date), // Convert string date to Date object
+      bounce_rate: parseFloat(metric.bounce_rate),
+      avg_session_duration: parseFloat(metric.avg_session_duration)
+    }));
+  } catch (error) {
+    console.error('Failed to fetch recent metrics:', error);
+    throw error;
+  }
 };
